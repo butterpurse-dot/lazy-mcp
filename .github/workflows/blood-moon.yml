@@ -1,0 +1,28 @@
+name: Blood Moon CI
+
+on:
+  push:
+    paths: ['games/blood-moon/**', '.github/workflows/blood-moon.yml']
+  pull_request:
+    paths: ['games/blood-moon/**', '.github/workflows/blood-moon.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: games/blood-moon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: games/blood-moon/package-lock.json
+      - run: npm ci
+      - run: npm audit --omit=dev
+      - run: npm test
+      - run: npm run build

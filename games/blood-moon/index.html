@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!--csp-->
+  <title>Blood Moon - Vampires vs Werewolves</title>
+  <meta name="description" content="A Counter-Strike style tactical shooter. Vampires plant the Blood Sigil, Werewolves defend. Play instantly in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23c0142e'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" hidden>
+    <div id="topbar">
+      <div class="team v"><b id="scoreV">0</b><span>Vampires <i id="aliveV">5</i></span></div>
+      <div id="clockbox"><div id="clock">1:40</div><div id="roundinfo"></div></div>
+      <div class="team w"><b id="scoreW">0</b><span>Werewolves <i id="aliveW">5</i></span></div>
+    </div>
+    <canvas id="radar" width="360" height="360"></canvas>
+    <ul id="killfeed"></ul>
+    <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+    <div id="hitmarker"></div>
+    <div id="scope" hidden></div>
+    <div id="vignette"></div>
+    <div id="banner"></div>
+    <div id="hint"></div>
+    <div id="progress" hidden><div id="progressBar"></div><span id="progressLabel"></span></div>
+    <div id="spec" hidden></div>
+    <div id="vitals"><div class="stat"><small>HEALTH</small><b id="hp">100</b></div><div class="stat"><small>ARMOR</small><b id="armor">0</b></div></div>
+    <div id="money"></div>
+    <div id="ammo"><small id="wname"></small><div><b id="mag">12</b><span id="reserve">/ 48</span></div><div id="slots"></div></div>
+    <div id="ability"><kbd>F</kbd><div><b id="abName"></b><small id="abState"></small></div><div id="abBar"></div></div>
+  </div>
+
+  <section id="buy" class="panel" hidden>
+    <h2>Armory <small>Press B or Esc to close</small></h2>
+    <div id="buyMoney"></div>
+    <div id="buyGrid"></div>
+    <p id="buyMsg"></p>
+  </section>
+
+  <section id="board" class="panel" hidden>
+    <h2 id="boardTitle">Scoreboard</h2>
+    <div id="boardBody"></div>
+  </section>
+
+  <main id="menu" class="screen">
+    <div class="card">
+      <h1>BLOOD <em>MOON</em></h1>
+      <p class="tag">Vampires <span>vs</span> Werewolves &mdash; 5v5 tactical shooter. Plant the Blood Sigil or stop it.</p>
+      <div class="teams" id="teamPick">
+        <button class="teamcard v" data-team="vampire" type="button"><h3>Vampires</h3><p>Attackers. Plant the Blood Sigil at site A or B and hold it for 35s.</p><ul><li>Fast, 100 HP</li><li>Heal on kill</li><li><kbd>F</kbd> Shadow Step dash</li></ul></button>
+        <button class="teamcard w" data-team="werewolf" type="button"><h3>Werewolves</h3><p>Defenders. Stop the plant, or cleanse the Sigil before it detonates.</p><ul><li>Tough, 125 HP</li><li>Moon Rifle</li><li><kbd>F</kbd> Feral Howl: haste + reveal</li></ul></button>
+      </div>
+      <div class="opts">
+        <label>Bot skill <select id="optDiff"><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option></select></label>
+        <label>Sensitivity <input id="optSens" type="range" min="0.2" max="3" step="0.1"></label>
+        <label>Volume <input id="optVol" type="range" min="0" max="1" step="0.05"></label>
+      </div>
+      <button id="play" class="primary" type="button">PLAY</button>
+      <p id="lifetime" class="small"></p>
+      <details><summary>Controls</summary>
+        <div class="keys"><span><kbd>W A S D</kbd> move</span><span><kbd>Mouse</kbd> aim / <kbd>LMB</kbd> fire / <kbd>RMB</kbd> scope</span><span><kbd>Shift</kbd> walk (quiet, accurate)</span><span><kbd>Space</kbd> jump</span><span><kbd>R</kbd> reload</span><span><kbd>1 2 3</kbd> weapons</span><span><kbd>B</kbd> armory</span><span><kbd>E</kbd> hold: plant / cleanse</span><span><kbd>F</kbd> team ability</span><span><kbd>Tab</kbd> scoreboard</span></div>
+      </details>
+    </div>
+  </main>
+
+  <main id="pause" class="screen" hidden>
+    <div class="card small"><h2>Paused</h2><button id="resume" class="primary" type="button">Resume</button><button id="restart" type="button">Restart match</button><button id="quit" type="button">Main menu</button></div>
+  </main>
+
+  <main id="over" class="screen" hidden>
+    <div class="card small"><h2 id="overTitle"></h2><p id="overBody"></p><button id="rematch" class="primary" type="button">Rematch</button><button id="toMenu" type="button">Main menu</button></div>
+  </main>
+
+  <noscript><p class="noscript">Blood Moon needs JavaScript and WebGL.</p></noscript>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

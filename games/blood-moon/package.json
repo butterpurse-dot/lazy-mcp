@@ -1,0 +1,20 @@
+{
+  "name": "blood-moon",
+  "version": "1.0.0",
+  "description": "Blood Moon - a Counter-Strike style tactical FPS: Vampires vs Werewolves (browser, Three.js)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "vite": "7.3.7",
+    "vitest": "5.0.5"
+  }
+}
