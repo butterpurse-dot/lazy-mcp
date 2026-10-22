@@ -1,0 +1,15 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.5",
+	"Category": "Games",
+	"Description": "Blood Moon - Vampires vs Werewolves tactical shooter",
+	"Modules": [
+		{
+			"Name": "BloodMoon",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": ["Engine"]
+		}
+	],
+	"TargetPlatforms": ["Windows", "Linux", "Mac"]
+}
