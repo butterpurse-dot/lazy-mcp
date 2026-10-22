@@ -35,7 +35,7 @@ jobs:
       - name: Engine-free C++ tests (warnings as errors, then ASan + UBSan)
         working-directory: games/blood-moon-ue
         run: |
-          for t in match:BMMatch grid:BMGrid; do
+          for t in match:BMMatch grid:BMGrid gun:BMGun; do
             n=${t%%:*}; s=${t##*:}
             clang++ -std=c++17 -O2 -Wall -Wextra -Werror -ISource/BloodMoon Tools/${n}_selftest.cpp Source/BloodMoon/$s.cpp -o ${n}_test && ./${n}_test
             g++ -std=c++17 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -ISource/BloodMoon Tools/${n}_selftest.cpp Source/BloodMoon/$s.cpp -o ${n}_asan && ./${n}_asan

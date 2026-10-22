@@ -1,6 +1,7 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "BMGun.h"
 #include "BMTypes.h"
 #include "BMCharacter.generated.h"
 
@@ -22,6 +23,9 @@ public:
 	virtual void Tick(float Dt) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* Input) override;
 	virtual void PawnClientRestart() override;
+	virtual bool CanJumpInternal_Implementation() const override;
+	/** Frozen (buy phase / match over), planting or cleansing, or dead. Enforced on the server and predicted locally. */
+	bool IsMovementLocked() const;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out) const override;
 
 	// ---- replicated state ----
@@ -101,7 +105,7 @@ private:
 	float AimFriction() const;
 	class ABMHUD* LocalHUD() const;
 	void ServerTick(float Dt);
-	void Fire();
+	void FireShot(const FBMWeaponDef& W);
 	void Melee(const FBMWeaponDef& W);
 	void ApplyVisuals();
 	void UpdateSpeed();
@@ -116,7 +120,8 @@ private:
 
 	// server-only
 	bool bWantFire = false, bWantUse = false;
-	float FireCd = 0.f, ReloadLeft = 0.f, Recoil = 0.f, ActionTime = 0.f, HasteLeft = 0.f;
+	FBMGun GunState; // trigger / rate / ammo / reload state machine of the active weapon (tested: Tools/gun_selftest.cpp)
+	float Recoil = 0.f, ActionTime = 0.f, HasteLeft = 0.f;
 	// client-only
 	bool bWalkHeld = false, bFireHeld = false;
 };

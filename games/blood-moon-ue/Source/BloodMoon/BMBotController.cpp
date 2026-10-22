@@ -120,7 +120,9 @@ void ABMBotController::Engage(ABMCharacter* Me, float Dt)
 	const float Dist = FVector::Dist2D(Aim, Eye), Tol = FMath::RadiansToDegrees(FMath::Atan(45.f / FMath::Max(Dist, 100.f))) + 1.5f;
 	const bool bAimed = FMath::Abs(FMath::FindDeltaAngleDegrees(Yaw, Want.Yaw)) < Tol && FMath::Abs(FMath::FindDeltaAngleDegrees(Pitch, Want.Pitch)) < Tol * 1.5f;
 	ReactT -= Dt;
-	Me->SetFiring(ReactT <= 0.f && bAimed && (!W || !W->bMelee || Dist < W->Range));
+	const bool bShoot = ReactT <= 0.f && bAimed && (!W || !W->bMelee || Dist < W->Range);
+	bTriggerPulse = !bTriggerPulse;
+	Me->SetFiring(bShoot && (!W || W->bAuto || W->bMelee || bTriggerPulse));
 
 	if ((StrafeT -= Dt) <= 0.f) { StrafeT = 0.5f + FMath::FRand() * 0.9f; static const float Dirs[4] = {-1.f, 0.f, 0.f, 1.f}; StrafeDir = Dirs[FMath::RandRange(0, 3)]; }
 	const FVector Right = FRotationMatrix(FRotator(0, Yaw, 0)).GetUnitAxis(EAxis::Y), Fwd = FRotator(0, Yaw, 0).Vector();

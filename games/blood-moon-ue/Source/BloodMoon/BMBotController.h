@@ -38,6 +38,7 @@ private:
 	TWeakObjectPtr<ABMCharacter> Target;
 	float ScanT = 0.f, LostT = 0.f, ReactT = 0.f, StrafeT = 0.f, StrafeDir = 0.f, RepathT = 0.f, LookT = 0.f, LookYaw = 0.f, StuckT = 0.f;
 	int32 StuckN = 0, PathIdx = 0;
+	bool bTriggerPulse = false; // semi-auto weapons need a fresh press per shot
 	bool bAimHead = false, bHasInvestigate = false, bHasHold = false, bHasGuard = false;
 	float InvestigateT = 0.f;
 	FVector Investigate = FVector::ZeroVector, Hold = FVector::ZeroVector, Guard = FVector::ZeroVector, LastPos = FVector::ZeroVector, GoalKey = FVector(-1e9);

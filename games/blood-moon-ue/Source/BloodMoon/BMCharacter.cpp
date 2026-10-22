@@ -23,7 +23,11 @@
 #include "UObject/ConstructorHelpers.h"
 
 static TAutoConsoleVariable<float> CVarSens(TEXT("bm.Sens"), 0.07f, TEXT("Mouse sensitivity in degrees per count"));
+static TAutoConsoleVariable<int32> CVarInvertMouse(TEXT("bm.InvertMouseY"), 0, TEXT("1 = invert mouse pitch"));
+static TAutoConsoleVariable<int32> CVarInvertStick(TEXT("bm.InvertStickY"), 0, TEXT("1 = invert gamepad pitch"));
 static constexpr ECollisionChannel WeaponChannel = ECC_GameTraceChannel1;
+
+static FBMGunSpec SpecOf(const FBMWeaponDef& W) { return FBMGunSpec{W.Rate, W.bAuto, W.bMelee, W.Mag, W.Reload}; }
 
 ABMCharacter::ABMCharacter()
 {
@@ -91,7 +95,7 @@ void ABMCharacter::InitLoadout(ABMPlayerState* PS)
 	for (int32 I = 0; I < 3; ++I)
 		if (const FBMWeaponDef* W = BMWeapons::Find(Loadout[I])) { Ammo[I].Mag = W->Mag; Ammo[I].Reserve = W->Reserve; }
 	Slot = Loadout[0] != NAME_None ? 0 : 1;
-	FireCd = 0.4f; bReloading = false; RevealUntil = 0.f; AbilityReadyTime = 0.f; ActionType = 0; ActionProgress = 0.f;
+	GunState.Equip(0.4f); bReloading = false; RevealUntil = 0.f; AbilityReadyTime = 0.f; ActionType = 0; ActionProgress = 0.f;
 	OnRep_Team(); OnRep_Alive();
 }
 
@@ -118,11 +122,24 @@ void ABMCharacter::OnRep_Alive()
 	if (!bAlive) { Body->SetRelativeLocation(FVector(40, 0, -80)); Head->SetRelativeLocation(FVector(110, 0, -75)); Gun->SetVisibility(false); }
 }
 
+bool ABMCharacter::IsMovementLocked() const
+{
+	const ABMGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABMGameState>() : nullptr;
+	const bool bFrozen = !GS || GS->Phase == EBMPhase::Freeze || GS->Phase == EBMPhase::MatchOver || GS->Phase == EBMPhase::Warmup;
+	return !bAlive || bFrozen || ActionType != 0;
+}
+
+bool ABMCharacter::CanJumpInternal_Implementation() const
+{
+	return Super::CanJumpInternal_Implementation() && !IsMovementLocked();
+}
+
 void ABMCharacter::UpdateSpeed()
 {
+	// Runs on server and clients from replicated state, so the lock is authoritative and predicted identically.
 	const float Base = Team == EBMTeam::Werewolf ? 530.f : 570.f;
 	const FBMWeaponDef* W = CurrentDef();
-	GetCharacterMovement()->MaxWalkSpeed = Base * (W ? W->MoveMul : 1.f) * (bHaste ? 1.25f : 1.f);
+	GetCharacterMovement()->MaxWalkSpeed = IsMovementLocked() ? 0.f : Base * (W ? W->MoveMul : 1.f) * (bHaste ? 1.25f : 1.f);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -185,12 +202,7 @@ ABMHUD* ABMCharacter::LocalHUD() const
 	return PC ? Cast<ABMHUD>(PC->GetHUD()) : nullptr;
 }
 
-bool ABMCharacter::CanMoveLocally() const
-{
-	const ABMGameState* GS = GetWorld()->GetGameState<ABMGameState>();
-	const bool bFrozen = !GS || GS->Phase == EBMPhase::Freeze || GS->Phase == EBMPhase::MatchOver || GS->Phase == EBMPhase::Warmup;
-	return bAlive && !bFrozen && ActionType == 0;
-}
+bool ABMCharacter::CanMoveLocally() const { return !IsMovementLocked(); }
 
 void ABMCharacter::OnMove(const FInputActionValue& V)
 {
@@ -205,7 +217,8 @@ void ABMCharacter::OnMove(const FInputActionValue& V)
 void ABMCharacter::OnLookMouse(const FInputActionValue& V)
 {
 	if (!bAlive) return;
-	const FVector2D D = V.Get<FVector2D>() * CVarSens.GetValueOnGameThread(); // mouse counts -> degrees, frame-rate independent
+	FVector2D D = V.Get<FVector2D>() * CVarSens.GetValueOnGameThread(); // mouse counts -> degrees, frame-rate independent
+	if (CVarInvertMouse.GetValueOnGameThread()) D.Y = -D.Y;
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		FRotator R = PC->GetControlRotation();
@@ -236,7 +249,8 @@ void ABMCharacter::OnLookStick(const FInputActionValue& V)
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC) return;
 	const float Rate = CVarStickRate.GetValueOnGameThread() * GetWorld()->GetDeltaSeconds() * AimFriction();
-	const FVector2D D = V.Get<FVector2D>() * Rate;
+	FVector2D D = V.Get<FVector2D>() * Rate;
+	if (CVarInvertStick.GetValueOnGameThread()) D.Y = -D.Y;
 	FRotator R = PC->GetControlRotation();
 	R.Yaw += D.X; R.Pitch = FMath::Clamp(FRotator::NormalizeAxis(R.Pitch) + D.Y, -88.f, 88.f);
 	PC->SetControlRotation(R);
@@ -311,18 +325,17 @@ void ABMCharacter::ServerTick(float Dt)
 	ABMGameMode* Mode = GM();
 	if (!GS || !Mode) return;
 	const bool bCanAct = GS->Phase == EBMPhase::Live || GS->Phase == EBMPhase::RoundEnd;
-	FireCd = FMath::Max(0.f, FireCd - Dt); Recoil = FMath::Max(0.f, Recoil - 10.f * Dt);
+	Recoil = FMath::Max(0.f, Recoil - 10.f * Dt);
 	if (bHaste && (HasteLeft -= Dt) <= 0.f) { bHaste = false; }
-	if (bReloading && (ReloadLeft -= Dt) <= 0.f)
+	if (const FBMWeaponDef* W = CurrentDef())
 	{
-		if (const FBMWeaponDef* W = CurrentDef())
-		{
-			FBMAmmo& A = Ammo[Slot]; const int32 N = FMath::Min(W->Mag - A.Mag, A.Reserve);
-			A.Mag += N; A.Reserve -= N;
-		}
-		bReloading = false;
+		FBMAmmo& A = Ammo[Slot];
+		int32_t Mag = A.Mag, Reserve = A.Reserve;
+		const EBMGunEvent E = GunState.Step(SpecOf(*W), Mag, Reserve, Dt, bWantFire, bCanAct && ActionType == 0);
+		A.Mag = Mag; A.Reserve = Reserve; bReloading = GunState.bReloading;
+		if (E == EBMGunEvent::Shot) FireShot(*W);
+		else if (E == EBMGunEvent::Swing) Melee(*W);
 	}
-	if (bCanAct && bWantFire && FireCd <= 0.f && !bReloading && ActionType == 0) Fire();
 
 	// Plant / cleanse
 	uint8 Next = 0;
@@ -347,26 +360,19 @@ void ABMCharacter::ServerTick(float Dt)
 void ABMCharacter::SelectSlot(uint8 NewSlot)
 {
 	if (NewSlot > 2 || Loadout[NewSlot] == NAME_None || NewSlot == Slot) return;
-	Slot = NewSlot; bReloading = false; FireCd = 0.35f;
+	Slot = NewSlot; GunState.Equip(); bReloading = false;
 }
 
 void ABMCharacter::StartReload()
 {
 	const FBMWeaponDef* W = CurrentDef();
-	if (!W || W->bMelee || bReloading || !bAlive) return;
-	const FBMAmmo& A = Ammo[Slot];
-	if (A.Mag >= W->Mag || A.Reserve <= 0) return;
-	bReloading = true; ReloadLeft = W->Reload;
+	if (!W || !bAlive) return;
+	if (GunState.StartReload(SpecOf(*W), Ammo[Slot].Mag, Ammo[Slot].Reserve)) bReloading = true;
 }
 
-void ABMCharacter::Fire()
+void ABMCharacter::FireShot(const FBMWeaponDef& Def)
 {
-	const FBMWeaponDef* W = CurrentDef();
-	if (!W) return;
-	if (W->bMelee) { Melee(*W); return; }
-	FBMAmmo& A = Ammo[Slot];
-	if (A.Mag <= 0) { FireCd = 0.25f; StartReload(); return; }
-	--A.Mag; FireCd = 1.f / W->Rate;
+	const FBMWeaponDef* W = &Def; // ammo and timing were already handled by GunState
 
 	const float SpeedFrac = FMath::Clamp(GetVelocity().Size2D() / FMath::Max(1.f, GetCharacterMovement()->MaxWalkSpeed), 0.f, 1.f);
 	const float Spread = W->Spread + W->MoveSpread * SpeedFrac + (GetCharacterMovement()->IsFalling() ? 4.f : 0.f) + Recoil + BotExtraSpread * (0.55f + 0.45f * SpeedFrac);
@@ -396,7 +402,6 @@ void ABMCharacter::Fire()
 
 void ABMCharacter::Melee(const FBMWeaponDef& W)
 {
-	FireCd = 1.f / W.Rate;
 	FHitResult Hit; const FVector Eye = EyeLocation(), End = Eye + GetControlRotation().Vector() * W.Range;
 	FCollisionQueryParams Q(SCENE_QUERY_STAT(BMStab), true, this);
 	if (GetWorld()->SweepSingleByChannel(Hit, Eye, End, FQuat::Identity, WeaponChannel, FCollisionShape::MakeSphere(25.f), Q))
@@ -430,8 +435,9 @@ void ABMCharacter::Die(ABMCharacter* Killer, const FBMWeaponDef* Def, bool bHead
 
 void ABMCharacter::UseAbility()
 {
-	const AGameStateBase* GS = GetWorld()->GetGameState();
-	if (!bAlive || !GS) return;
+	const ABMGameState* GS = GetWorld()->GetGameState<ABMGameState>();
+	if (!bAlive || !GS || ActionType != 0) return;
+	if (GS->Phase != EBMPhase::Live && GS->Phase != EBMPhase::RoundEnd) return; // no abilities in the buy phase
 	const float Now = GS->GetServerWorldTimeSeconds();
 	if (AbilityReadyTime > Now) return;
 	if (Team == EBMTeam::Vampire)

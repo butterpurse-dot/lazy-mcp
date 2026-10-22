@@ -201,3 +201,30 @@ describe('player actions', () => {
     expect(p.ammo[p.loadout.secondary].mag).toBe(12);
   });
 });
+
+describe('weapon feel', () => {
+  const live = (seed) => {
+    const sim = new Sim({ rng: mulberry32(seed), playerTeam: 'vampire' });
+    for (let i = 0; i < 60 * (RULES.freezeTime + 0.5); i++) sim.update(1 / 60);
+    for (const a of sim.actors) if (a !== sim.player) Object.assign(a.brain, { scanT: 1e9, target: null, investigate: null, hold: { x: a.pos.x, z: a.pos.z } });
+    const p = sim.player; p.pos = { x: 39.5, y: 0, z: 36 }; p.yaw = Math.PI; // face an empty corridor
+    return sim;
+  };
+  const shotsWhile = (sim, frames, fire) => { let n = 0; const off = sim.bus.on('shot', (e) => { if (e.actor === sim.player) n++; }); for (let i = 0; i < frames; i++) { sim.intent.fire = fire(i); sim.update(1 / 60); } off(); return n; };
+
+  it('full-auto fires at exactly the weapon rate (no tick rounding)', () => {
+    const sim = live(5), p = sim.player; p.money = 9000; sim.match.elapsed = 0;
+    sim.match.phase = 'freeze'; expect(sim.buy(p, 'bloodcarbine').ok).toBe(true); sim.match.phase = 'live';
+    for (let i = 0; i < 30; i++) sim.update(1 / 60); // draw time
+    const n = shotsWhile(sim, 120, () => true); // 2 seconds
+    expect(n).toBeGreaterThanOrEqual(19); expect(n).toBeLessThanOrEqual(21); // 10/s rifle
+  });
+
+  it('semi-auto fires once per press, not while held', () => {
+    const sim = live(6);
+    for (let i = 0; i < 30; i++) sim.update(1 / 60);
+    expect(shotsWhile(sim, 60, () => true)).toBe(1);
+    shotsWhile(sim, 5, () => false); // release
+    expect(shotsWhile(sim, 60, (i) => i % 10 < 3)).toBe(6); // 6 separate clicks in 1 s
+  });
+});

@@ -174,7 +174,9 @@ export class Sim {
   step(a, it, dt) {
     const m = this.match, team = TEAMS[a.team];
     const frozen = m.phase === 'freeze' || m.phase === 'idle', canAct = m.phase === 'live' || m.phase === 'ended';
-    a.fireCd = Math.max(0, a.fireCd - dt); a.abilityCd = Math.max(0, a.abilityCd - dt); a.howlT = Math.max(0, a.howlT - dt);
+    // An expiring cooldown carries its sub-tick overshoot into the next shot so real fire rate matches the weapon spec
+    // (clamping to 0 rounds every interval up to whole ticks: a 10/s rifle fired 8.6/s at 60 Hz). Idle guns bank nothing.
+    a.fireCd = a.fireCd > 0 ? Math.max(-dt, a.fireCd - dt) : 0; a.abilityCd = Math.max(0, a.abilityCd - dt); a.howlT = Math.max(0, a.howlT - dt);
     a.hurtT = Math.max(0, a.hurtT - dt); a.recoil = Math.max(0, a.recoil - 10 * dt); a.punch *= Math.exp(-7 * dt);
     for (const t of TEAM_IDS) a.spotted[t] = Math.max(0, a.spotted[t] - dt);
 
@@ -221,7 +223,7 @@ export class Sim {
     const wantFire = it.fire && (w.auto || w.melee || !a.prevFire);
     a.prevFire = it.fire;
     if (canAct && !acting && !a.reloading) {
-      if (wantFire && a.fireCd <= 0) this.fire(a, w, am);
+      if (wantFire && a.fireCd <= 1e-6) this.fire(a, w, am);
       else if (!w.melee && am.mag <= 0 && am.reserve > 0) this.startReload(a, w);
       else if (it.reload && !w.melee && am.mag < w.mag && am.reserve > 0) this.startReload(a, w);
     }
@@ -278,7 +280,7 @@ export class Sim {
   fire(a, w, am) {
     if (w.melee) return this.melee(a, w);
     if (am.mag <= 0) { a.fireCd = 0.25; this.bus.emit('dry', { actor: a }); return; }
-    am.mag--; a.fireCd = 1 / w.rate;
+    am.mag--; a.fireCd = Math.min(0, a.fireCd) + 1 / w.rate;
     const speedFrac = Math.min(1, Math.hypot(a.vel.x, a.vel.z) / TEAMS[a.team].speed);
     let spread = w.spread + w.moveSpread * speedFrac + (a.grounded ? 0 : 4) + a.recoil;
     if (w.scoped && !a.scoped) spread += 5;
@@ -312,7 +314,7 @@ export class Sim {
   }
 
   melee(a, w) {
-    a.fireCd = 1 / w.rate;
+    a.fireCd = Math.min(0, a.fireCd) + 1 / w.rate;
     const f = forward(a.yaw, a.pitch), o = eyeOf(a);
     const wall = this.grid.raycast(o.x, o.y, o.z, f.x, f.y, f.z, w.range);
     let best = wall ? wall.dist : w.range, victim = null;

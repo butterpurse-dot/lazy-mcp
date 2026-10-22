@@ -20,6 +20,7 @@ The browser prototype in `../blood-moon` stays as the "lite" edition for low-end
 | Code-only HUD: vitals, ammo, radar, kill feed, armory, scoreboard | `BMHUD.*` | Written, untested |
 | Weapon table (8 weapons) | `BMWeapons.*` | Ported from the JS prototype |
 | Map grid + bot pathfinding (A*, string-pulling) | `BMGrid.*` | **Tested** (clang + ASan/UBSan self-test) |
+| Weapon trigger/fire-rate/ammo/reload state machine (semi vs auto, click buffer, exact rate at any tick) | `BMGun.*` | **Tested** (clang + ASan/UBSan self-test) |
 | Input: KB/M + gamepad via Enhanced Input, created in code | `BMInput.*` | Written, untested |
 
 Controls (Enhanced Input, keyboard/mouse **and gamepad** at the same time; full table in `Source/BloodMoon/BMInput.h`):
@@ -33,7 +34,8 @@ Controls (Enhanced Input, keyboard/mouse **and gamepad** at the same time; full 
 | Next weapon / slots | wheel / 1-3 | Y |
 | Armory / scoreboard | B (1-9 or arrows + Enter) / Tab | LB (D-pad + A) / View |
 
-Console variables: `bm.Sens` (mouse, degrees per count), `bm.StickRate` (gamepad, degrees per second).
+Console variables: `bm.Sens` (mouse, degrees per count), `bm.StickRate` (gamepad, degrees per second),
+`bm.InvertMouseY` / `bm.InvertStickY` (0/1). Movement, jumping and abilities are locked server-side during the buy phase and while planting/cleansing.
 
 ## Build and run
 
