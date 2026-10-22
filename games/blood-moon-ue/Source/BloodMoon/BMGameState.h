@@ -22,7 +22,6 @@ public:
 	UPROPERTY(Replicated) uint8 LastWinner = 2;       // EBMTeam, 2 = none
 	UPROPERTY(Replicated) uint8 LastReason = 0;       // EMatchReason
 	UPROPERTY(Replicated) FVector SigilLocation = FVector::ZeroVector;
-	UPROPERTY(Replicated) uint32 BuyEndsAtMs = 0;
 
 	float PhaseRemaining() const { return FMath::Max(0.f, PhaseEndTime - GetServerWorldTimeSeconds()); }
 	float SigilRemaining() const { return bSigilPlanted ? FMath::Max(0.f, SigilEndTime - GetServerWorldTimeSeconds()) : 0.f; }

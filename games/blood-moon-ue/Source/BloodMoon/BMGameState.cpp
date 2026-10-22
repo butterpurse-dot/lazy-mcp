@@ -16,7 +16,6 @@ void ABMGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out) co
 	DOREPLIFETIME(ABMGameState, LastWinner);
 	DOREPLIFETIME(ABMGameState, LastReason);
 	DOREPLIFETIME(ABMGameState, SigilLocation);
-	DOREPLIFETIME(ABMGameState, BuyEndsAtMs);
 }
 
 static ABMHUD* LocalHUD(const UObject* Ctx)

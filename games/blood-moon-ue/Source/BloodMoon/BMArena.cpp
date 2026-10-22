@@ -1,12 +1,11 @@
 #include "BMArena.h"
+#include "BMMaterials.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/SkyLightComponent.h"
-#include "Components/SkyAtmosphereComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/PointLightComponent.h"
-#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Algo/Reverse.h"
 
@@ -40,7 +39,8 @@ namespace
 ABMArena::ABMArena()
 {
 	PrimaryActorTick.bCanEverTick = false;
-	bReplicates = false; // geometry is deterministic: every machine builds the same arena locally
+	// Replicated only so remote clients get the actor; its geometry is deterministic and built locally on each machine.
+	bReplicates = true; bAlwaysRelevant = true; SetReplicatingMovement(false); NetUpdateFrequency = 1.f;
 	USceneComponent* Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
@@ -56,10 +56,17 @@ ABMArena::ABMArena()
 	Floor->SetupAttachment(Root); Floor->SetStaticMesh(Cube.Object); Floor->SetCollisionProfileName(TEXT("BlockAll")); Floor->SetMobility(EComponentMobility::Movable);
 }
 
+void ABMArena::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	BuildGrid(); // before BeginPlay, so pathing/spawn queries are valid as soon as the actor exists
+}
+
 void ABMArena::BeginPlay()
 {
 	Super::BeginPlay();
-	BuildGrid(); BuildMeshes(); BuildLights();
+	if (GetNetMode() != NM_DedicatedServer) BuildLights();
+	BuildMeshes(); // collision is needed everywhere (server authority + client movement prediction)
 }
 
 void ABMArena::BuildGrid()
@@ -74,16 +81,13 @@ void ABMArena::BuildGrid()
 
 bool ABMArena::IsSolid(int32 Cx, int32 Cy) const
 {
-	if (Cx < 0 || Cy < 0 || Cx >= W || Cy >= H) return true;
+	if (Cx < 0 || Cy < 0 || Cx >= W || Cy >= H || Rows.Num() != H) return true;
 	return Rows[Cy][Cx] != '.';
 }
 
 void ABMArena::BuildMeshes()
 {
-	auto Tint = [this](UPrimitiveComponent* C, const FLinearColor& Col)
-	{
-		if (UMaterialInstanceDynamic* M = C->CreateAndSetMaterialInstanceDynamic(0)) M->SetVectorParameterValue(TEXT("Color"), Col);
-	};
+	auto Tint = [](UPrimitiveComponent* C, const FLinearColor& Col) { BMMaterials::Apply(C, BMMaterials::Lit(), Col); };
 	auto Add = [](UInstancedStaticMeshComponent* C, int32 X, int32 Y, float Height)
 	{
 		// Engine cube is 100 cm with its pivot at the centre.
@@ -109,11 +113,12 @@ void ABMArena::BuildMeshes()
 
 void ABMArena::BuildLights()
 {
-	// Moonlight, atmosphere and fog; point lights for torches. Everything is Movable (Lumen, no baked lighting).
+	// Night: a red moon (not an atmosphere "sun", which would render a daytime sky), sky light, fog and torches.
+	// Everything is Movable so Lumen handles GI; nothing is baked.
 	UDirectionalLightComponent* Moon = NewObject<UDirectionalLightComponent>(this);
-	Moon->SetMobility(EComponentMobility::Movable); Moon->SetIntensity(1.2f); Moon->SetLightColor(FLinearColor(1.f, 0.55f, 0.5f));
+	Moon->SetMobility(EComponentMobility::Movable); Moon->SetIntensity(3.f); Moon->SetLightColor(FLinearColor(1.f, 0.55f, 0.5f));
+	Moon->SetAtmosphereSunLight(false);
 	Moon->SetupAttachment(GetRootComponent()); Moon->SetRelativeRotation(FRotator(-35.f, 110.f, 0.f)); Moon->RegisterComponent();
-	USkyAtmosphereComponent* Sky = NewObject<USkyAtmosphereComponent>(this); Sky->SetupAttachment(GetRootComponent()); Sky->RegisterComponent();
 	USkyLightComponent* SkyL = NewObject<USkyLightComponent>(this);
 	SkyL->SetMobility(EComponentMobility::Movable); SkyL->bRealTimeCapture = true; SkyL->SetIntensity(0.35f); SkyL->SetupAttachment(GetRootComponent()); SkyL->RegisterComponent();
 	UExponentialHeightFogComponent* Fog = NewObject<UExponentialHeightFogComponent>(this);

@@ -14,4 +14,5 @@ public:
 private:
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Disc;
 	UPROPERTY() TObjectPtr<class UPointLightComponent> Glow;
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> Mid;
 };

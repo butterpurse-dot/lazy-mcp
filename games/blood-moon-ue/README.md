@@ -3,9 +3,10 @@
 Native version of the tactical shooter for **PC (Windows / Linux / SteamOS) and Mac**, with a path to Steam and consoles.
 The browser prototype in `../blood-moon` stays as the "lite" edition for low-end machines.
 
-> **Status: scaffold, not yet compiled.** The authoring environment had no Unreal Engine, no GPU and no display, so
-> none of the C++ below has been built or played. Only `BMMatch` (the round/economy rules) is verified, with a plain-C++
-> self-test (`Tools/match_selftest.cpp`). Expect a handful of compile errors on first build; paste them back and they get fixed.
+> **Status: gameplay scaffold, not yet compiled, placeholder art.** The authoring environment had no Unreal Engine, GPU or
+> display, so the gameplay C++ has been code-reviewed but not built or played. `BMMatch` (round/economy rules) is compiled and
+> tested in CI (`Tools/match_selftest.cpp`). Visuals are engine primitives and **will be replaced** by real art built on
+> Epic's Lyra sample (see `docs/ROADMAP.md`, section 1). First build and play-test happen on the GP66: `Tools/gp66/`.
 
 ## What is in the box
 
@@ -30,7 +31,9 @@ or Xcode (Mac), or the Linux toolchain from the UE docs.
 ```bash
 # 1. Right-click BloodMoon.uproject -> "Generate Project Files" (or: <UE>/Engine/Build/BatchFiles/Build.bat ...)
 # 2. Open the generated BloodMoon.sln and build "BloodMoonEditor | Development Editor", or just open the .uproject.
-# 3. In the editor press Play (the default map is the engine's built-in /Engine/Maps/Entry; the arena is spawned by code).
+# 3. Opening the editor runs Content/Python/init_unreal.py once, creating /Game/Materials/M_BMLit + M_BMEmissive (commit them).
+# 4. Press Play (the default map is the engine's built-in /Engine/Maps/Entry; the arena is spawned by code).
+# Linux one-shot (GP66): Tools/gp66/setup-linux.sh all   - checks, compiles, packages; see Tools/gp66/HANDOFF.md
 ```
 Standalone with options: `UnrealEditor.exe BloodMoon.uproject /Engine/Maps/Entry?Team=werewolf?Diff=hard -game`
 (`Team=vampire|werewolf`, `Diff=easy|normal|hard`).

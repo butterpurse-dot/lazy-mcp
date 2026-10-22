@@ -8,8 +8,24 @@
 			"Name": "BloodMoon",
 			"Type": "Runtime",
 			"LoadingPhase": "Default",
-			"AdditionalDependencies": ["Engine"]
+			"AdditionalDependencies": [
+				"Engine"
+			]
 		}
 	],
-	"TargetPlatforms": ["Windows", "Linux", "Mac"]
+	"TargetPlatforms": [
+		"Windows",
+		"Linux",
+		"Mac"
+	],
+	"Plugins": [
+		{
+			"Name": "PythonScriptPlugin",
+			"Enabled": true
+		},
+		{
+			"Name": "EditorScriptingUtilities",
+			"Enabled": true
+		}
+	]
 }

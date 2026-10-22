@@ -15,6 +15,11 @@ namespace BMWeapons
 	const TArray<FBMWeaponDef>& All();
 	const FBMWeaponDef* Find(FName Id);
 	bool CanUse(const FBMWeaponDef& W, EBMTeam Team);
+	inline FName ArmorId() { return FName(TEXT("armor")); }
+	inline FName SidearmId() { return FName(TEXT("nightfang")); }
+	inline FName DaggerId() { return FName(TEXT("dagger")); }
+	/** Items a team can buy, in menu order (weapons first, armor last). Index into this is what clients send. */
+	TArray<FName> Shop(EBMTeam Team);
 	constexpr int32 ArmorPrice = 650;
 	constexpr float ArmorValue = 100.f;
 }

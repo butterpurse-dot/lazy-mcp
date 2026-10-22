@@ -18,6 +18,9 @@ export class UI {
     this.bindSim(sim);
   }
 
+  /** Write a style property only when its value changed (avoids per-frame style recalcs). */
+  sty(key, el, prop, v) { if (this.cache.get(key) !== v) { this.cache.set(key, v); if (prop.startsWith('--')) el.style.setProperty(prop, v); else el.style[prop] = v; } }
+
   txt(key, el, v) { if (this.cache.get(key) !== v) { this.cache.set(key, v); el.textContent = v; } }
   cls(key, el, name, on) { const k = key + name; if (this.cache.get(k) !== on) { this.cache.set(k, on); el.classList.toggle(name, on); } }
 
@@ -82,14 +85,14 @@ export class UI {
     const ab = TEAMS[p.team].ability;
     this.txt('abn', E.abName, ab.name); this.txt('abs', E.abState, p.abilityCd > 0 ? `${Math.ceil(p.abilityCd)}s` : ab.hint);
     this.cls('ab', E.ability, 'ready', p.abilityCd <= 0);
-    E.abBar.style.transform = `scaleX(${p.abilityCd > 0 ? 1 - p.abilityCd / ab.cooldown : 1})`;
+    this.sty('abBar', E.abBar, 'transform', `scaleX(${(p.abilityCd > 0 ? 1 - p.abilityCd / ab.cooldown : 1).toFixed(2)})`);
 
     // crosshair, scope, damage
     const spread = (w.spread + w.moveSpread * Math.min(1, Math.hypot(p.vel.x, p.vel.z) / 5.5) + p.recoil + (p.grounded ? 0 : 4)) * 2.2;
-    E.crosshair.style.setProperty('--gap', `${3 + spread}px`);
+    this.sty('gap', E.crosshair, '--gap', `${Math.round(3 + spread)}px`);
     E.crosshair.hidden = chase || !p.alive || p.scoped || w.melee;
     E.scope.hidden = !p.scoped;
-    E.vignette.style.opacity = !chase && p.hurtT > 0 ? Math.min(1, p.hurtT * 2.2) : 0;
+    this.sty('vig', E.vignette, 'opacity', String(!chase && p.hurtT > 0 ? Math.min(1, p.hurtT * 2.2).toFixed(2) : 0));
 
     // objective prompt + progress
     let hint = '';
@@ -102,7 +105,7 @@ export class UI {
     this.txt('hint', E.hint, hint); this.cls('hint', E.hint, 'on', !!hint);
     const need = p.actionType === 'plant' ? sim.rules.plantTime : sim.rules.cleanseTime;
     E.progress.hidden = !p.actionType;
-    if (p.actionType) { E.progressBar.style.width = `${Math.min(100, (p.actionT / need) * 100)}%`; this.txt('pl', E.progressLabel, p.actionType === 'plant' ? 'PLANTING' : 'CLEANSING'); }
+    if (p.actionType) { this.sty('prog', E.progressBar, 'width', `${Math.min(100, Math.round((p.actionT / need) * 100))}%`); this.txt('pl', E.progressLabel, p.actionType === 'plant' ? 'PLANTING' : 'CLEANSING'); }
 
     // spectator label
     E.spec.hidden = !chase; if (chase) this.txt('sp', E.spec, p.alive ? `Spectating ${p === sim.player ? 'yourself' : p.name}` : 'No one left to watch');

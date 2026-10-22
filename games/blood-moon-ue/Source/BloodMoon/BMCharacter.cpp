@@ -7,13 +7,13 @@
 #include "BMBotController.h"
 #include "BMTracer.h"
 #include "BMWeapons.h"
+#include "BMMaterials.h"
 #include "Camera/CameraComponent.h"
 #include "EngineUtils.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -47,7 +47,7 @@ ABMCharacter::ABMCharacter()
 	Head = Make(TEXT("Head"), Sph.Object, GetCapsuleComponent()); Head->SetOwnerNoSee(true);
 	Gun = Make(TEXT("Gun"), Cube.Object, Cam); Gun->SetOnlyOwnerSee(true); Gun->SetCastShadow(false);
 	Gun->SetRelativeLocation(FVector(40, 18, -18)); Gun->SetRelativeScale3D(FVector(0.5f, 0.06f, 0.09f));
-	Loadout[1] = "nightfang"; Loadout[2] = "dagger";
+	Loadout[1] = BMWeapons::SidearmId(); Loadout[2] = BMWeapons::DaggerId();
 }
 
 void ABMCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out) const
@@ -58,9 +58,11 @@ void ABMCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out) co
 	DOREPLIFETIME(ABMCharacter, bReloading); DOREPLIFETIME(ABMCharacter, ActionType); DOREPLIFETIME(ABMCharacter, ActionProgress);
 	DOREPLIFETIME(ABMCharacter, RevealUntil); DOREPLIFETIME(ABMCharacter, bHaste);
 	DOREPLIFETIME(ABMCharacter, Loadout);
-	DOREPLIFETIME_CONDITION(ABMCharacter, Ammo, COND_OwnerOnly);
-	DOREPLIFETIME_CONDITION(ABMCharacter, AbilityReadyTime, COND_OwnerOnly);
+	DOREPLIFETIME(ABMCharacter, Ammo);             // spectators' HUD shows the viewed player's ammo
+	DOREPLIFETIME(ABMCharacter, AbilityReadyTime);
 }
+
+bool ABMCharacter::IsHumanControlled() const { return Cast<APlayerController>(GetController()) != nullptr; }
 
 ABMGameMode* ABMCharacter::GM() const { return GetWorld() ? GetWorld()->GetAuthGameMode<ABMGameMode>() : nullptr; }
 
@@ -80,7 +82,7 @@ void ABMCharacter::InitLoadout(ABMPlayerState* PS)
 	Team = PS->Team;
 	MaxHealth = Team == EBMTeam::Werewolf ? 125.f : 100.f;
 	Health = MaxHealth; Armor = PS->Armor; bAlive = true; bHaste = false;
-	Loadout[0] = PS->Primary; Loadout[1] = PS->Secondary; Loadout[2] = "dagger";
+	Loadout[0] = PS->Primary; Loadout[1] = PS->Secondary; Loadout[2] = BMWeapons::DaggerId();
 	for (int32 I = 0; I < 3; ++I)
 		if (const FBMWeaponDef* W = BMWeapons::Find(Loadout[I])) { Ammo[I].Mag = W->Mag; Ammo[I].Reserve = W->Reserve; }
 	Slot = Loadout[0] != NAME_None ? 0 : 1;
@@ -92,15 +94,16 @@ void ABMCharacter::OnRep_Team() { ApplyVisuals(); UpdateSpeed(); }
 
 void ABMCharacter::ApplyVisuals()
 {
+	if (Team == EBMTeam::None || Team == VisualTeam) return; // idempotent: OnRep_Team also fires for haste changes
+	VisualTeam = Team;
 	const bool bWolf = Team == EBMTeam::Werewolf;
 	const FLinearColor Col = bWolf ? FLinearColor(0.20f, 0.11f, 0.05f) : FLinearColor(0.35f, 0.04f, 0.08f);
 	const float Wd = bWolf ? 1.15f : 0.85f;
 	Body->SetRelativeScale3D(FVector(Wd, Wd, 1.4f)); Body->SetRelativeLocation(FVector(0, 0, -22.f));
 	Head->SetRelativeScale3D(FVector(bWolf ? 0.42f : 0.3f)); Head->SetRelativeLocation(FVector(0, 0, 76.f));
-	for (UStaticMeshComponent* C : {Body.Get(), Head.Get()})
-		if (UMaterialInstanceDynamic* M = C->CreateAndSetMaterialInstanceDynamic(0))
-			M->SetVectorParameterValue(TEXT("Color"), C == Head && !bWolf ? FLinearColor(0.85f, 0.8f, 0.8f) : Col);
-	if (UMaterialInstanceDynamic* M = Gun->CreateAndSetMaterialInstanceDynamic(0)) M->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.02f, 0.02f, 0.03f));
+	BMMaterials::Apply(Body, BMMaterials::Lit(), Col);
+	BMMaterials::Apply(Head, BMMaterials::Lit(), bWolf ? Col : FLinearColor(0.85f, 0.8f, 0.8f));
+	BMMaterials::Apply(Gun, BMMaterials::Lit(), FLinearColor(0.02f, 0.02f, 0.03f));
 }
 
 void ABMCharacter::OnRep_Alive()
@@ -108,7 +111,6 @@ void ABMCharacter::OnRep_Alive()
 	GetCapsuleComponent()->SetCollisionEnabled(bAlive ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
 	Body->SetRelativeRotation(bAlive ? FRotator::ZeroRotator : FRotator(90.f, 0.f, 0.f));
 	if (!bAlive) { Body->SetRelativeLocation(FVector(40, 0, -80)); Head->SetRelativeLocation(FVector(110, 0, -75)); Gun->SetVisibility(false); }
-	else { ApplyVisuals(); Gun->SetVisibility(true); }
 }
 
 void ABMCharacter::UpdateSpeed()
@@ -167,7 +169,7 @@ void ABMCharacter::LocalInput(float Dt)
 	for (int32 I = 0; I < 9; ++I)
 	{
 		if (!PC->WasInputKeyJustPressed(Digits[I])) continue;
-		if (HUD && HUD->bBuyOpen) { const FName Id = HUD->BuyItemAt(I); if (Id != NAME_None) ServerBuy(Id); }
+		if (HUD && HUD->bBuyOpen) { if (I < BMWeapons::Shop(Team).Num()) ServerBuy(static_cast<uint8>(I)); }
 		else if (I < 3) ServerSelectSlot(I == 0 ? 0 : I == 1 ? 1 : 2);
 	}
 }
@@ -179,8 +181,6 @@ void ABMCharacter::ServerTick(float Dt)
 	ABMGameMode* Mode = GM();
 	if (!GS || !Mode) return;
 	const bool bCanAct = GS->Phase == EBMPhase::Live || GS->Phase == EBMPhase::RoundEnd;
-	const float Now = GS->GetServerWorldTimeSeconds();
-
 	FireCd = FMath::Max(0.f, FireCd - Dt); Recoil = FMath::Max(0.f, Recoil - 10.f * Dt);
 	if (bHaste && (HasteLeft -= Dt) <= 0.f) { bHaste = false; }
 	if (bReloading && (ReloadLeft -= Dt) <= 0.f)
@@ -209,7 +209,6 @@ void ABMCharacter::ServerTick(float Dt)
 		GetCharacterMovement()->StopMovementImmediately();
 		if (ActionTime >= Need) { if (Next == 1) Mode->OnPlanted(this); else Mode->OnCleansed(this); ActionType = 0; ActionTime = 0.f; ActionProgress = 0.f; }
 	}
-	(void)Now;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -243,7 +242,6 @@ void ABMCharacter::Fire()
 	const float Spread = W->Spread + W->MoveSpread * SpeedFrac + (GetCharacterMovement()->IsFalling() ? 4.f : 0.f) + Recoil + BotExtraSpread * (0.55f + 0.45f * SpeedFrac);
 	const FVector Eye = EyeLocation(); const FVector Aim = GetControlRotation().Vector();
 	FCollisionQueryParams Q(SCENE_QUERY_STAT(BMShot), true, this);
-	FVector Last = Eye + Aim * W->Range; bool bAnyHit = false;
 	for (int32 P = 0; P < W->Pellets; ++P)
 	{
 		const FVector Dir = FMath::VRandCone(Aim, FMath::DegreesToRadians(Spread));
@@ -257,15 +255,13 @@ void ABMCharacter::Fire()
 				const bool bHead = Hit.ImpactPoint.Z > V->GetActorLocation().Z + 62.f;
 				float Dmg = W->Damage * FMath::Pow(W->Falloff, Hit.Distance / 1000.f);
 				if (bHead) Dmg *= W->HeadMul;
-				V->ApplyHit(Dmg, this, bHead, *W); bAnyHit = true;
+				V->ApplyHit(Dmg, this, bHead, *W);
 			}
 		}
 		MulticastShotFx(Eye + FRotationMatrix(GetControlRotation()).GetUnitAxis(EAxis::Y) * 20.f - FVector(0, 0, 15.f), Impact, static_cast<uint8>(Team));
-		Last = Impact;
 	}
 	Recoil = FMath::Min(6.f, Recoil + W->Kick * 0.5f);
-	ClientKick(W->Kick * 0.6f);
-	(void)bAnyHit; (void)Last;
+	if (IsHumanControlled()) ClientKick(W->Kick * 0.6f);
 }
 
 void ABMCharacter::Melee(const FBMWeaponDef& W)
@@ -288,7 +284,7 @@ void ABMCharacter::ApplyHit(float Damage, ABMCharacter* Attacker, bool bHead, co
 	float Lost = Damage;
 	if (Armor > 0.f) { const float Used = FMath::Min(Armor, Damage * (1.f - Def.Pen) * 0.5f); Armor -= Used; Lost = Damage - Used * 2.f; }
 	Health -= Lost;
-	if (Attacker) Attacker->ClientHit(bHead);
+	if (Attacker && Attacker->IsHumanControlled()) Attacker->ClientHit(bHead);
 	if (ABMBotController* Bot = Cast<ABMBotController>(GetController())) Bot->OnHurt(Attacker);
 	if (Health <= 0.f) Die(Attacker, &Def, bHead);
 }
@@ -328,18 +324,20 @@ void ABMCharacter::UseAbility()
 void ABMCharacter::ServerSetFiring_Implementation(bool bFire) { bWantFire = bFire; }
 void ABMCharacter::ServerSetUse_Implementation(bool bUse) { bWantUse = bUse; }
 void ABMCharacter::ServerReload_Implementation() { StartReload(); }
+bool ABMCharacter::ServerSelectSlot_Validate(uint8 NewSlot) { return NewSlot <= 2; }
 void ABMCharacter::ServerSelectSlot_Implementation(uint8 NewSlot) { SelectSlot(NewSlot); }
 void ABMCharacter::ServerAbility_Implementation() { UseAbility(); }
-void ABMCharacter::ServerBuy_Implementation(FName ItemId)
+bool ABMCharacter::ServerBuy_Validate(uint8 ShopIndex) { return ShopIndex < 32; }
+void ABMCharacter::ServerBuy_Implementation(uint8 ShopIndex)
 {
-	if (ABMGameMode* Mode = GM()) { const FString Err = Mode->TryBuy(this, ItemId); ClientBuyResult(Err); }
+	if (ABMGameMode* Mode = GM()) ClientBuyResult(Mode->TryBuy(this, ShopIndex));
 }
 
 void ABMCharacter::MulticastShotFx_Implementation(FVector Start, FVector End, uint8 ShooterTeam)
 {
 	if (GetNetMode() == NM_DedicatedServer) return;
-	if (ABMTracer* T = GetWorld()->SpawnActor<ABMTracer>(Start, FRotator::ZeroRotator))
-		T->Init(Start, End, ShooterTeam == 0 ? FLinearColor(1.f, 0.2f, 0.25f) : FLinearColor(0.5f, 0.75f, 1.f));
+	if (UBMFxSubsystem* Fx = GetWorld()->GetSubsystem<UBMFxSubsystem>())
+		Fx->Tracer(Start, End, ShooterTeam == 0 ? FLinearColor(1.f, 0.2f, 0.25f) : FLinearColor(0.5f, 0.75f, 1.f));
 }
 
 void ABMCharacter::MulticastDash_Implementation(FVector Impulse) { LaunchCharacter(Impulse, true, false); }

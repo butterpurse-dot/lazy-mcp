@@ -3,6 +3,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "BMMaterials.h"
 #include "UObject/ConstructorHelpers.h"
 
 ABMSigil::ABMSigil()
@@ -28,6 +29,7 @@ void ABMSigil::Tick(float Dt)
 	const float Pulse = 0.5f + 0.5f * FMath::Sin(GetWorld()->GetTimeSeconds() * (4.f + (1.f - Frac) * 14.f));
 	Glow->SetIntensity(3000.f + 30000.f * Pulse);
 	Disc->AddLocalRotation(FRotator(0.f, 40.f * Dt, 0.f));
-	if (UMaterialInstanceDynamic* M = Cast<UMaterialInstanceDynamic>(Disc->GetMaterial(0))) M->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.f, 0.05f, 0.12f) * (2.f + 8.f * Pulse));
-	else Disc->CreateAndSetMaterialInstanceDynamic(0);
+	const FLinearColor C = FLinearColor(1.f, 0.05f, 0.12f) * (2.f + 8.f * Pulse);
+	if (!Mid) Mid = BMMaterials::Apply(Disc, BMMaterials::Emissive(), C); // created once, then only parameters change
+	else Mid->SetVectorParameterValue(TEXT("Color"), C);
 }

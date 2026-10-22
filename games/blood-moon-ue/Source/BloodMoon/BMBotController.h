@@ -21,6 +21,8 @@ public:
 	void SetDifficulty(int32 Level); // 0 easy, 1 normal, 2 hard
 	void RoundReset(const FVector& NewHold);
 	void OnHurt(ABMCharacter* From);
+	/** Aim is driven explicitly in Tick; stop AAIController resetting pitch/yaw to the pawn's orientation each frame. */
+	virtual void UpdateControlRotation(float DeltaTime, bool bUpdatePawn = true) override {}
 
 private:
 	bool CanSee(const ABMCharacter* Me, const ABMCharacter* E) const;

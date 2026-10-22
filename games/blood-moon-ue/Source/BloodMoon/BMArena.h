@@ -17,6 +17,7 @@ class BLOODMOON_API ABMArena : public AActor
 	GENERATED_BODY()
 public:
 	ABMArena();
+	virtual void PostInitializeComponents() override;
 	virtual void BeginPlay() override;
 
 	static constexpr float Cell = 150.f, WallH = 360.f, CrateH = 130.f;

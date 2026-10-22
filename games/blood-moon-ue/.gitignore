@@ -8,3 +8,6 @@ Saved/
 *.sln
 *.suo
 *.xcworkspace
+__pycache__/
+*.pyc
+Dist/

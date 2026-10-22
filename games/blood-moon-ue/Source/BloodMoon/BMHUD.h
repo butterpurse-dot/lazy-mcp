@@ -19,7 +19,6 @@ public:
 	void ShowBanner(const FString& Title, const FString& Sub, uint8 Team);
 	void Notice(const FString& Text);
 	void HitMarker(bool bHead);
-	FName BuyItemAt(int32 Index) const;
 
 private:
 	struct FFeed { FString K, V, W; uint8 KT, VT; bool bHead; float Until; };
@@ -35,5 +34,4 @@ private:
 	void DrawBuy(const ABMCharacter* View);
 	void DrawBoard();
 	FLinearColor TeamColor(uint8 Team) const;
-	TArray<FName> BuyList(const ABMCharacter* View) const;
 };

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { buildWorld } from './world.js';
-import { buildCharacter, buildViewmodel, buildGun, setViewGun } from './models.js';
+import { buildCharacter, buildViewmodel, buildGun, setViewGun, disposeTree } from './models.js';
 import { nameTexture } from './textures.js';
 import { Fx } from './fx.js';
 import { TEAMS } from '../config/teams.js';
@@ -83,7 +83,7 @@ export class Renderer {
       c.armL.rotation.x = c.armR.rotation.x = -1.3 + (act.fireCd > 0.05 ? 0.12 : 0) - (act.pitch * 0.6);
       c.head.rotation.x = act.pitch * 0.7;
       const w = weaponOf(act);
-      if (c.gunCls !== w.cls) { c.gun.clear(); c.gun.add(buildGun(w.cls)); c.gunCls = w.cls; }
+      if (c.gunCls !== w.cls) { for (const g of c.gun.children) disposeTree(g); c.gun.clear(); c.gun.add(buildGun(w.cls)); c.gunCls = w.cls; }
       c.root.rotation.x = act.alive ? 0 : -Math.min(1, act.deathT * 3) * Math.PI / 2;
       for (const m of c.mats) m.emissive.copy(c.glow).r += act.hurtT > 0 ? act.hurtT * 2 : 0;
       c.label.visible = act.alive && act.team === a.team && act !== a;

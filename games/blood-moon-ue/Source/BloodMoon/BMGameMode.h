@@ -34,7 +34,7 @@ public:
 
 	// ---- called by characters (server) ----
 	void NotifyKill(ABMCharacter* Victim, ABMCharacter* Killer, const FBMWeaponDef* Weapon, bool bHead);
-	FString TryBuy(ABMCharacter* Buyer, FName ItemId); // returns an error message, or empty on success
+	FString TryBuy(ABMCharacter* Buyer, uint8 ShopIndex); // returns an error message, or empty on success
 	void OnPlanted(ABMCharacter* Planter_);
 	void OnCleansed(ABMCharacter* Cleanser_);
 	const FBMMatch& GetMatch() const { return Match; }

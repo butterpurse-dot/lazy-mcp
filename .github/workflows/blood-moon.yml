@@ -2,9 +2,9 @@ name: Blood Moon CI
 
 on:
   push:
-    paths: ['games/blood-moon/**', '.github/workflows/blood-moon.yml']
+    paths: ['games/blood-moon/**', 'games/blood-moon-ue/**', '.github/workflows/blood-moon.yml']
   pull_request:
-    paths: ['games/blood-moon/**', '.github/workflows/blood-moon.yml']
+    paths: ['games/blood-moon/**', 'games/blood-moon-ue/**', '.github/workflows/blood-moon.yml']
 
 permissions:
   contents: read
@@ -26,3 +26,10 @@ jobs:
       - run: npm audit --omit=dev
       - run: npm test
       - run: npm run build
+
+  ue-rules:
+    # Engine-free C++ (round/economy rules) is compiled and tested on every change; the rest needs Unreal.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: clang++ -std=c++17 -Wall -Wextra -Werror -Igames/blood-moon-ue/Source/BloodMoon games/blood-moon-ue/Tools/match_selftest.cpp games/blood-moon-ue/Source/BloodMoon/BMMatch.cpp -o match_selftest && ./match_selftest

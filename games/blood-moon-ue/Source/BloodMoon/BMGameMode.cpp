@@ -131,10 +131,17 @@ void ABMGameMode::UpdatePlan()
 {
 	ABMGameState* GS = GetGameState<ABMGameState>();
 	if (!Arena || !GS) return;
-	if (!Planter.IsValid() || !Planter->GetPawn() || !Cast<ABMCharacter>(Planter->GetPawn())->bAlive)
-		if (ABMCharacter* C = NearestAlive(EBMTeam::Vampire, Arena->SiteCenter(PlanSite))) Planter = C->GetController();
+	const ABMCharacter* Current = Planter.IsValid() ? Cast<ABMCharacter>(Planter->GetPawn()) : nullptr;
+	if (!Current || !Current->bAlive)
+	{
+		ABMCharacter* C = NearestAlive(EBMTeam::Vampire, Arena->SiteCenter(PlanSite));
+		Planter = C ? C->GetController() : nullptr;
+	}
 	if (Match.bSigil)
-		if (ABMCharacter* C = NearestAlive(EBMTeam::Werewolf, GS->SigilLocation)) Cleanser = C->GetController();
+	{
+		ABMCharacter* C = NearestAlive(EBMTeam::Werewolf, GS->SigilLocation);
+		Cleanser = C ? C->GetController() : nullptr;
+	}
 }
 
 ABMCharacter* ABMGameMode::NearestAlive(EBMTeam Team, const FVector& P) const
@@ -187,6 +194,7 @@ void ABMGameMode::OnRoundEnded()
 		PS->AddMoney(Match.Reward[BMIdx(PS->Team)], BMRules::MaxMoney);
 		const ABMCharacter* P = Cast<ABMCharacter>((*It)->GetPawn());
 		PS->bSurvived = P && P->bAlive;
+		if (PS->bSurvived) PS->Armor = P->Armor; // survivors keep what is left of their armor, not a fresh plate
 	}
 	SyncPhase(EBMPhase::RoundEnd, BMRules::EndDelay);
 	if (GS)
@@ -232,11 +240,14 @@ void ABMGameMode::NotifyKill(ABMCharacter* Victim, ABMCharacter* Killer, const F
 		if (ABMCharacter* Mate = NearestAlive(Victim->Team, Victim->GetActorLocation())) PC->SetViewTargetWithBlend(Mate, 0.6f);
 }
 
-FString ABMGameMode::TryBuy(ABMCharacter* B, FName Id)
+FString ABMGameMode::TryBuy(ABMCharacter* B, uint8 ShopIndex)
 {
 	ABMPlayerState* PS = B ? B->GetPlayerState<ABMPlayerState>() : nullptr;
 	if (!PS || !B->bAlive || !Match.BuyOpen()) return TEXT("Buy time is over");
-	if (Id == "armor")
+	const TArray<FName> Shop = BMWeapons::Shop(PS->Team);
+	if (!Shop.IsValidIndex(ShopIndex)) return TEXT("Unknown item");
+	const FName Id = Shop[ShopIndex];
+	if (Id == BMWeapons::ArmorId())
 	{
 		if (B->Armor >= BMWeapons::ArmorValue) return TEXT("Already armored");
 		if (PS->Money < BMWeapons::ArmorPrice) return TEXT("Not enough money");
@@ -262,7 +273,8 @@ void ABMGameMode::BotBuy(ABMPlayerState* PS)
 	auto Afford = [&](FName Id) { const FBMWeaponDef* W = BMWeapons::Find(Id); return W && BMWeapons::CanUse(*W, PS->Team) && W->Price + (PS->Armor < 50.f ? BMWeapons::ArmorPrice : 0) <= M; };
 	if (PS->Primary == NAME_None)
 	{
-		const FName Pick[] = {Rng.FRand() < 0.3f ? FName("silverbolt") : NAME_None, bVamp ? FName("bloodcarbine") : FName("moonrifle"), Rng.FRand() < 0.5f ? FName("gravegun") : FName("cryptsmg"), FName("cryptsmg")};
+		const FName Sniper(TEXT("silverbolt")), Rifle(bVamp ? TEXT("bloodcarbine") : TEXT("moonrifle")), Smg(TEXT("cryptsmg")), Shotgun(TEXT("gravegun"));
+		const FName Pick[] = {Rng.FRand() < 0.3f ? Sniper : FName(NAME_None), Rifle, Rng.FRand() < 0.5f ? Shotgun : Smg, Smg};
 		for (const FName Id : Pick) if (Id != NAME_None && Afford(Id)) { PS->Primary = Id; PS->Money -= BMWeapons::Find(Id)->Price; break; }
 	}
 	if (PS->Armor < 50.f && PS->Money >= BMWeapons::ArmorPrice) { PS->Money -= BMWeapons::ArmorPrice; PS->Armor = BMWeapons::ArmorValue; }

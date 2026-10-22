@@ -30,21 +30,6 @@ void ABMHUD::ShowBanner(const FString& T, const FString& S, uint8 Team) { Banner
 void ABMHUD::Notice(const FString& T) { NoticeText = T; NoticeUntil = GetWorld()->GetTimeSeconds() + 2.f; }
 void ABMHUD::HitMarker(bool bHead) { HitUntil = GetWorld()->GetTimeSeconds() + 0.15f; bHitHead = bHead; }
 
-TArray<FName> ABMHUD::BuyList(const ABMCharacter* V) const
-{
-	TArray<FName> Out;
-	for (const FBMWeaponDef& W : BMWeapons::All()) if (W.Price > 0 && BMWeapons::CanUse(W, V->Team)) Out.Add(W.Id);
-	Out.Add("armor");
-	return Out;
-}
-
-FName ABMHUD::BuyItemAt(int32 Index) const
-{
-	const ABMCharacter* V = Cast<ABMCharacter>(GetOwningPawn());
-	if (!V) return NAME_None;
-	const TArray<FName> L = BuyList(V);
-	return L.IsValidIndex(Index) ? L[Index] : NAME_None;
-}
 
 void ABMHUD::DrawHUD()
 {
@@ -139,6 +124,7 @@ void ABMHUD::DrawRadar(const ABMCharacter* View, float X, float Y, float Size)
 	if ((SpotT -= GetWorld()->GetDeltaSeconds()) <= 0.f)
 	{
 		SpotT = 0.25f;
+		for (auto It = Spotted.CreateIterator(); It; ++It) if (!It.Key().IsValid() || It.Value() < Now) It.RemoveCurrent(); // bounded: pawns are re-created every round
 		for (TActorIterator<ABMCharacter> E(GetWorld()); E; ++E)
 		{
 			if (!E->bAlive || E->Team == View->Team) continue;
@@ -167,7 +153,7 @@ void ABMHUD::DrawBuy(const ABMCharacter* View)
 	Text(TEXT("ARMORY  (press the number to buy, B to close)"), W * 0.5f, H * 0.2f + 14 * S, FLinearColor(1, 1, 1), 1.2f * S, true);
 	int32 N = 1; float Y = H * 0.2f + 70 * S;
 	const ABMPlayerState* PS = View->GetPlayerState<ABMPlayerState>();
-	for (const FName Id : BuyList(View))
+	for (const FName Id : BMWeapons::Shop(View->Team))
 	{
 		const FBMWeaponDef* D = BMWeapons::Find(Id);
 		const int32 Price = D ? D->Price : BMWeapons::ArmorPrice;

@@ -78,10 +78,18 @@ export function buildViewmodel(team) {
   return root;
 }
 
+/** Free GPU buffers of a subtree. Shared materials (GUN/WOOD/SILVER) are kept; only clones are disposed. */
+export function disposeTree(obj, disposeMaterials = false) {
+  obj.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (disposeMaterials && o.material) o.material.dispose();
+  });
+}
+
 export function setViewGun(vm, cls) {
   if (vm.userData.cls === cls) return;
   const { holder } = vm.userData;
-  if (vm.userData.gun) holder.remove(vm.userData.gun);
+  if (vm.userData.gun) { holder.remove(vm.userData.gun); disposeTree(vm.userData.gun, true); }
   const g = buildGun(cls);
   g.traverse((o) => { if (o.material) { o.material = o.material.clone(); o.material.depthTest = false; } });
   g.position.set(0, 0, 0); holder.add(g); vm.userData.gun = g; vm.userData.cls = cls;

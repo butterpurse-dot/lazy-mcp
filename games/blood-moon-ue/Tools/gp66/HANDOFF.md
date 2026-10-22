@@ -1,0 +1,11 @@
+# Task for the Claude session on the home network: install and test Blood Moon on the GP66
+
+You are on the user's home network. The GP66 (MSI gaming laptop, NVIDIA GPU) accepts SSH with sudo.
+
+1. **Find and reach it.** `ssh gp66` or its LAN IP (check the router / `arp -a`). Ask the user for the address or username if needed. Do not change SSH or firewall config.
+2. **Identify the OS.** `uname -a` (Linux) or `ver` (Windows/OpenSSH). The steps below are for Linux; on Windows use the Epic Games Launcher + Visual Studio 2022 instead and run the same Build/RunUAT commands with the `.bat` variants.
+3. **Unreal Engine 5.5.** It needs the user's Epic account: ask them to download the Linux build from https://www.unrealengine.com/linux (or install via the Epic Launcher on Windows). Do not handle their Epic password.
+4. **Run the script.** Copy `games/blood-moon-ue/Tools/gp66/setup-linux.sh` to the GP66, then `UE_ROOT=<engine dir> ./setup-linux.sh all`. It checks GPU/driver/disk/RAM, installs packages, clones branch `claude/vampires-werewolves-game-p5rejb`, compiles, generates materials and packages a Shipping build.
+5. **Compile errors are expected on the first build** (the C++ was written without an engine available). Fix them in the repo, keep each fix minimal, rebuild, and commit with a clear message.
+6. **Play-test with a checklist.** Start with `./setup-linux.sh run`. Then check: mouse look, WASD, jump and walk; fire, reload and switch 1/2/3; the B armory buys with digits; E plants at A/B and cleanses; F uses the ability; Tab opens the scoreboard. Check that bots move, fight, plant and cleanse, rounds end correctly, money updates, and the match ends at 7. Note fps with `stat fps` and `stat unit` on the Low and Epic tiers.
+7. **Report back** to the cloud session (`lazy-mcp-c6`): the OS, the GPU, the build result, each checklist item as pass or fail with details, fps, and the commits you pushed.

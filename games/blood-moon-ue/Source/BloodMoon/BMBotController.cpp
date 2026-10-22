@@ -181,9 +181,9 @@ void ABMBotController::Tick(float Dt)
 	if (Target.IsValid() && !Target->bAlive) Target = nullptr;
 
 	// weapon housekeeping
-	const FBMAmmo& P = Me->Ammo[0];
-	const uint8 Want = Me->Loadout[0] != NAME_None && P.Mag + P.Reserve > 0 ? 0 : 1;
-	if (Me->Slot != Want && Me->Slot != 2) Me->SelectSlot(Want);
+	auto HasAmmo = [Me](int32 S) { return Me->Loadout[S] != NAME_None && Me->Ammo[S].Mag + Me->Ammo[S].Reserve > 0; };
+	const uint8 Want = HasAmmo(0) ? 0 : HasAmmo(1) ? 1 : 2; // fall back to the dagger when completely dry
+	if (Me->Slot != Want) Me->SelectSlot(Want);
 	if (const FBMWeaponDef* W = Me->CurrentDef())
 		if (!Target.IsValid() && !W->bMelee && Me->Ammo[Me->Slot].Mag < W->Mag / 2) Me->StartReload();
 

@@ -19,10 +19,10 @@ public:
 	UPROPERTY(Replicated) bool bIsBot = false;
 
 	// Server-only: what the pawn is re-equipped with at round start.
-	FName Primary = NAME_None, Secondary = "nightfang";
+	FName Primary = NAME_None, Secondary = FName(TEXT("nightfang"));
 	float Armor = 0.f;
 	bool bSurvived = false;
 
-	void ResetLoadout() { Primary = NAME_None; Secondary = "nightfang"; Armor = 0.f; }
+	void ResetLoadout() { Primary = NAME_None; Secondary = FName(TEXT("nightfang")); Armor = 0.f; }
 	void AddMoney(int32 Amount, int32 Max);
 };

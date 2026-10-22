@@ -3,7 +3,19 @@
 ## 0. Make it compile and play (next step, needs a machine with UE 5.5)
 Build, fix compile errors, play a full match vs bots, then profile. Everything else builds on this.
 
-## 1. Graphics quality (the real gap)
+## 1. Modern look and feel (CoD / CS2 class): build on Lyra - no primitive geometry
+The current cubes/cylinders are placeholders for testing the rules. The target is a modern shooter look and feel, and the fastest
+credible route is **Epic's free Lyra Starter Game** (UE 5.5): production-quality animated characters, first-person weapons with
+recoil/ADS/reload animations, hit reactions, Enhanced Input with gamepad support and rebinding, CommonUI menus, scalable settings
+and a networked GAS-based shooter framework. Plan:
+1. Create the project from Lyra; add Blood Moon as a **Game Feature plugin** (`Plugins/GameFeatures/BloodMoon`). Port: `BMMatch`
+   (as-is), economy and buy menu, plant/cleanse Sigil, team abilities (as GAS abilities), bots' objective logic (on Lyra's bots).
+2. Art: vampire and werewolf characters retargeted onto Lyra's skeleton (Fab/marketplace or commissioned), Megascans gothic
+   cathedral kit for the map, Niagara VFX (muzzle, blood, sigil, howl, dash), MetaSounds audio.
+3. Keep the C++ in this folder as the reference implementation and test bed until the Lyra port reaches parity.
+Licensing: Lyra and Fab content are licensed for use in Unreal Engine projects - keep that content out of public repos.
+
+## 1b. Graphics quality details
 The code uses engine cube/cylinder primitives as placeholders. Engine settings are already modern (Lumen, virtual shadow maps, TSR,
 fog, atmosphere in `DefaultEngine.ini` and `BMArena`), but pretty comes from content:
 * Environment: Quixel Megascans / Fab Nanite kits (gothic stone, brick, rubble), trim sheets, decals. Replace `BMArena` ISM cubes with a hand-authored level (`.umap`) built from modular kit pieces, keeping the same grid for bot pathing or switching to a NavMesh.
@@ -32,6 +44,9 @@ platform-holder certification; Unreal's platform code is distributed to approved
 so add an input abstraction first), console-safe UI (the HUD is canvas-based and scales), 30/60 fps targets, TRC/XR compliance, and a publisher or porting partner.
 
 ## 5. Gameplay still to build
+Known limitations of the current scaffold (all found in code review, to be fixed or superseded by the Lyra port):
+legacy key polling (no gamepad/rebinding - Lyra's Enhanced Input fixes this); Shadow Step/haste are not movement-predicted
+(possible client correction); late joiners wait for the next round and teams can exceed 5; arena walls are per-instance physics bodies.
 Lag compensation / server-side rewind for hitscan, proper movement-speed prediction (custom `UCharacterMovementComponent` instead of setting
 `MaxWalkSpeed`), grenades/utility, weapon drops, bomb carrier, menus (team select, settings, server browser), spectator modes, replays, ranked, more maps.
 

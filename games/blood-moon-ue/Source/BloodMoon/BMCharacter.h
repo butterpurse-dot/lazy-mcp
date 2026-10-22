@@ -57,9 +57,10 @@ public:
 	UFUNCTION(Server, Reliable) void ServerSetFiring(bool bFire);
 	UFUNCTION(Server, Reliable) void ServerSetUse(bool bUse);
 	UFUNCTION(Server, Reliable) void ServerReload();
-	UFUNCTION(Server, Reliable) void ServerSelectSlot(uint8 NewSlot);
+	UFUNCTION(Server, Reliable, WithValidation) void ServerSelectSlot(uint8 NewSlot);
 	UFUNCTION(Server, Reliable) void ServerAbility();
-	UFUNCTION(Server, Reliable) void ServerBuy(FName ItemId);
+	/** Index into BMWeapons::Shop(Team). Indices, not names: clients can't inject arbitrary FNames into the server's name table. */
+	UFUNCTION(Server, Reliable, WithValidation) void ServerBuy(uint8 ShopIndex);
 
 	// ---- server -> clients ----
 	UFUNCTION(NetMulticast, Unreliable) void MulticastShotFx(FVector Start, FVector End, uint8 ShooterTeam);
@@ -85,6 +86,8 @@ private:
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Body;
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Head;
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Gun;
+	EBMTeam VisualTeam = EBMTeam::None; // team the materials were built for (avoids re-creating MIDs)
+	bool IsHumanControlled() const;
 
 	// server-only
 	bool bWantFire = false, bWantUse = false;
