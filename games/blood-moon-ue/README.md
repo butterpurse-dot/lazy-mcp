@@ -19,9 +19,21 @@ The browser prototype in `../blood-moon` stays as the "lite" edition for low-end
 | Arena "Crimson Cathedral" built at runtime (no .umap needed), Lumen-ready lights | `BMArena.*` | Written, untested |
 | Code-only HUD: vitals, ammo, radar, kill feed, armory, scoreboard | `BMHUD.*` | Written, untested |
 | Weapon table (8 weapons) | `BMWeapons.*` | Ported from the JS prototype |
+| Map grid + bot pathfinding (A*, string-pulling) | `BMGrid.*` | **Tested** (clang + ASan/UBSan self-test) |
+| Input: KB/M + gamepad via Enhanced Input, created in code | `BMInput.*` | Written, untested |
 
-Controls are the same as the prototype: WASD, mouse, LMB fire, R reload, Shift walk, Space jump, 1/2/3 slots, **B** armory (digits buy),
-**E** hold plant/cleanse, **F** ability, **Tab** scoreboard. Sensitivity: console `bm.Sens <deg per count>`.
+Controls (Enhanced Input, keyboard/mouse **and gamepad** at the same time; full table in `Source/BloodMoon/BMInput.h`):
+
+| Action | KB/M | Gamepad |
+|---|---|---|
+| Move / look | WASD / mouse | left / right stick (dead zone, response curve, aim friction) |
+| Fire / jump | LMB / Space | RT / A |
+| Plant or cleanse (hold) / reload | E / R | X / B |
+| Ability / walk | F / Shift | RB / L3 |
+| Next weapon / slots | wheel / 1-3 | Y |
+| Armory / scoreboard | B (1-9 or arrows + Enter) / Tab | LB (D-pad + A) / View |
+
+Console variables: `bm.Sens` (mouse, degrees per count), `bm.StickRate` (gamepad, degrees per second).
 
 ## Build and run
 

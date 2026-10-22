@@ -14,6 +14,7 @@ public:
 	virtual void DrawHUD() override;
 
 	bool bBuyOpen = false, bBoard = false;
+	int32 BuyCursor = 0; // highlighted armory row (gamepad / arrow keys)
 
 	void PushKill(const FString& Killer, uint8 KillerTeam, const FString& Victim, uint8 VictimTeam, const FString& Weapon, bool bHead);
 	void ShowBanner(const FString& Title, const FString& Sub, uint8 Team);

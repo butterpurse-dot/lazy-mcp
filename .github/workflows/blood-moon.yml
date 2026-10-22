@@ -32,4 +32,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: clang++ -std=c++17 -Wall -Wextra -Werror -Igames/blood-moon-ue/Source/BloodMoon games/blood-moon-ue/Tools/match_selftest.cpp games/blood-moon-ue/Source/BloodMoon/BMMatch.cpp -o match_selftest && ./match_selftest
+      - name: Engine-free C++ tests (warnings as errors, then ASan + UBSan)
+        working-directory: games/blood-moon-ue
+        run: |
+          for t in match:BMMatch grid:BMGrid; do
+            n=${t%%:*}; s=${t##*:}
+            clang++ -std=c++17 -O2 -Wall -Wextra -Werror -ISource/BloodMoon Tools/${n}_selftest.cpp Source/BloodMoon/$s.cpp -o ${n}_test && ./${n}_test
+            g++ -std=c++17 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -ISource/BloodMoon Tools/${n}_selftest.cpp Source/BloodMoon/$s.cpp -o ${n}_asan && ./${n}_asan
+          done

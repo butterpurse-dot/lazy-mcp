@@ -20,6 +20,8 @@ class BLOODMOON_API ABMCharacter : public ACharacter
 public:
 	ABMCharacter();
 	virtual void Tick(float Dt) override;
+	virtual void SetupPlayerInputComponent(UInputComponent* Input) override;
+	virtual void PawnClientRestart() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out) const override;
 
 	// ---- replicated state ----
@@ -74,7 +76,30 @@ protected:
 	UFUNCTION() void OnRep_Alive();
 
 private:
-	void LocalInput(float Dt);
+	// ---- local input (owning client only; everything gameplay-relevant goes to the server via RPC) ----
+	void OnMove(const struct FInputActionValue& V);
+	void OnLookMouse(const struct FInputActionValue& V);
+	void OnLookStick(const struct FInputActionValue& V);
+	void OnFire(bool bDown);
+	void OnFireStart() { OnFire(true); }
+	void OnFireStop() { OnFire(false); }
+	void OnUseStart() { if (bAlive) ServerSetUse(true); }
+	void OnUseStop() { ServerSetUse(false); }
+	void OnJump();
+	void OnConfirm();
+	void OnReload() { if (bAlive) ServerReload(); }
+	void OnAbility() { if (bAlive) ServerAbility(); }
+	void OnWalkStart() { bWalkHeld = true; }
+	void OnWalkStop() { bWalkHeld = false; }
+	void OnNextWeapon();
+	void OnArmory();
+	void OnBoardStart();
+	void OnBoardStop();
+	void OnMenuNav(const struct FInputActionValue& V);
+	void OnNumber(int32 Index);
+	bool CanMoveLocally() const;
+	float AimFriction() const;
+	class ABMHUD* LocalHUD() const;
 	void ServerTick(float Dt);
 	void Fire();
 	void Melee(const FBMWeaponDef& W);
@@ -92,6 +117,6 @@ private:
 	// server-only
 	bool bWantFire = false, bWantUse = false;
 	float FireCd = 0.f, ReloadLeft = 0.f, Recoil = 0.f, ActionTime = 0.f, HasteLeft = 0.f;
-	// client-only edge detection
-	bool bSentFire = false, bSentUse = false;
+	// client-only
+	bool bWalkHeld = false, bFireHeld = false;
 };

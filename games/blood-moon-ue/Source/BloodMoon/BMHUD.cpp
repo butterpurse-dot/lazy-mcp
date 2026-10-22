@@ -39,6 +39,7 @@ void ABMHUD::DrawHUD()
 	if (!GS || !View || !Canvas) return;
 	const float S = Canvas->ClipY / 1080.f, W = Canvas->ClipX, H = Canvas->ClipY, Now = GetWorld()->GetTimeSeconds();
 	const bool bSelf = View == GetOwningPawn();
+	if (bBuyOpen && (!bSelf || !View->bAlive || GS->Phase == EBMPhase::RoundEnd || GS->Phase == EBMPhase::MatchOver)) bBuyOpen = false; // never leave a stale menu blocking fire
 	const FLinearColor White(1, 1, 1), Gold(1.f, 0.81f, 0.35f);
 
 	// scoreboard strip + clock
@@ -150,7 +151,7 @@ void ABMHUD::DrawBuy(const ABMCharacter* View)
 {
 	const float S = Canvas->ClipY / 1080.f, W = Canvas->ClipX, H = Canvas->ClipY;
 	DrawRect(FLinearColor(0, 0, 0, 0.8f), W * 0.5f - 330 * S, H * 0.2f, 660 * S, 560 * S);
-	Text(TEXT("ARMORY  (press the number to buy, B to close)"), W * 0.5f, H * 0.2f + 14 * S, FLinearColor(1, 1, 1), 1.2f * S, true);
+	Text(TEXT("ARMORY   1-9 or D-pad + A to buy   |   B / LB to close"), W * 0.5f, H * 0.2f + 14 * S, FLinearColor(1, 1, 1), 1.2f * S, true);
 	int32 N = 1; float Y = H * 0.2f + 70 * S;
 	const ABMPlayerState* PS = View->GetPlayerState<ABMPlayerState>();
 	for (const FName Id : BMWeapons::Shop(View->Team))
@@ -158,6 +159,7 @@ void ABMHUD::DrawBuy(const ABMCharacter* View)
 		const FBMWeaponDef* D = BMWeapons::Find(Id);
 		const int32 Price = D ? D->Price : BMWeapons::ArmorPrice;
 		const bool bCan = PS && PS->Money >= Price;
+		if (N - 1 == BuyCursor) DrawRect(FLinearColor(1.f, 0.81f, 0.35f, 0.18f), W * 0.5f - 310 * S, Y - 4 * S, 620 * S, 40 * S);
 		Text(FString::Printf(TEXT("%d.  %-16s $%d"), N++, D ? D->Name : TEXT("Silver Plate (armor)"), Price), W * 0.5f - 300 * S, Y, bCan ? FLinearColor(1, 1, 1) : FLinearColor(0.5f, 0.5f, 0.5f), 1.2f * S);
 		Y += 44 * S;
 	}

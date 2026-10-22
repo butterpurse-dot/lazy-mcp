@@ -45,7 +45,7 @@ so add an input abstraction first), console-safe UI (the HUD is canvas-based and
 
 ## 5. Gameplay still to build
 Known limitations of the current scaffold (all found in code review, to be fixed or superseded by the Lyra port):
-legacy key polling (no gamepad/rebinding - Lyra's Enhanced Input fixes this); Shadow Step/haste are not movement-predicted
+no in-game key rebinding UI or pause menu yet (Enhanced Input is in place; Lyra's settings screens cover both); Shadow Step/haste are not movement-predicted
 (possible client correction); late joiners wait for the next round and teams can exceed 5; arena walls are per-instance physics bodies.
 Lag compensation / server-side rewind for hitscan, proper movement-speed prediction (custom `UCharacterMovementComponent` instead of setting
 `MaxWalkSpeed`), grenades/utility, weapon drops, bomb carrier, menus (team select, settings, server browser), spectator modes, replays, ranked, more maps.

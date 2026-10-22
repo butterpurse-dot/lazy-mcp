@@ -8,7 +8,12 @@
 #include "BMTracer.h"
 #include "BMWeapons.h"
 #include "BMMaterials.h"
+#include "BMInput.h"
 #include "Camera/CameraComponent.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputActionValue.h"
+#include "Engine/LocalPlayer.h"
 #include "EngineUtils.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -127,51 +132,176 @@ void ABMCharacter::Tick(float Dt)
 {
 	Super::Tick(Dt);
 	UpdateSpeed();
-	if (IsLocallyControlled() && Cast<APlayerController>(GetController())) LocalInput(Dt);
 	if (HasAuthority()) ServerTick(Dt);
 }
 
-void ABMCharacter::LocalInput(float Dt)
+// ---------------------------------------------------------------------------------------------------------------
+// Local input (Enhanced Input, see BMInput.h). Runs only on the owning client.
+// ---------------------------------------------------------------------------------------------------------------
+static TAutoConsoleVariable<float> CVarStickRate(TEXT("bm.StickRate"), 200.f, TEXT("Gamepad look speed in degrees per second at full deflection"));
+
+void ABMCharacter::PawnClientRestart()
 {
-	APlayerController* PC = Cast<APlayerController>(GetController());
-	ABMHUD* HUD = PC ? Cast<ABMHUD>(PC->GetHUD()) : nullptr;
+	Super::PawnClientRestart();
+	if (const APlayerController* PC = Cast<APlayerController>(GetController()))
+		if (UEnhancedInputLocalPlayerSubsystem* Sub = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+		{
+			Sub->RemoveMappingContext(BMInput::Get().Context); // idempotent across respawns
+			Sub->AddMappingContext(BMInput::Get().Context, 0);
+		}
+}
+
+void ABMCharacter::SetupPlayerInputComponent(UInputComponent* Input)
+{
+	Super::SetupPlayerInputComponent(Input);
+	UEnhancedInputComponent* EI = Cast<UEnhancedInputComponent>(Input);
+	if (!ensureMsgf(EI, TEXT("Enhanced Input is not the default input component - check Config/DefaultInput.ini"))) return;
+	const FBMInputSet& A = BMInput::Get();
+	using T = ETriggerEvent;
+	EI->BindAction(A.Move, T::Triggered, this, &ABMCharacter::OnMove);
+	EI->BindAction(A.LookMouse, T::Triggered, this, &ABMCharacter::OnLookMouse);
+	EI->BindAction(A.LookStick, T::Triggered, this, &ABMCharacter::OnLookStick);
+	EI->BindAction(A.Fire, T::Started, this, &ABMCharacter::OnFireStart);
+	EI->BindAction(A.Fire, T::Completed, this, &ABMCharacter::OnFireStop);
+	EI->BindAction(A.Use, T::Started, this, &ABMCharacter::OnUseStart);
+	EI->BindAction(A.Use, T::Completed, this, &ABMCharacter::OnUseStop);
+	EI->BindAction(A.Jump, T::Started, this, &ABMCharacter::OnJump);
+	EI->BindAction(A.Confirm, T::Started, this, &ABMCharacter::OnConfirm);
+	EI->BindAction(A.Reload, T::Started, this, &ABMCharacter::OnReload);
+	EI->BindAction(A.Ability, T::Started, this, &ABMCharacter::OnAbility);
+	EI->BindAction(A.Walk, T::Started, this, &ABMCharacter::OnWalkStart);
+	EI->BindAction(A.Walk, T::Completed, this, &ABMCharacter::OnWalkStop);
+	EI->BindAction(A.NextWeapon, T::Started, this, &ABMCharacter::OnNextWeapon);
+	EI->BindAction(A.Armory, T::Started, this, &ABMCharacter::OnArmory);
+	EI->BindAction(A.Scoreboard, T::Started, this, &ABMCharacter::OnBoardStart);
+	EI->BindAction(A.Scoreboard, T::Completed, this, &ABMCharacter::OnBoardStop);
+	EI->BindAction(A.MenuNav, T::Started, this, &ABMCharacter::OnMenuNav);
+	for (int32 I = 0; I < 9; ++I) EI->BindAction(A.Number[I], T::Started, this, &ABMCharacter::OnNumber, I);
+}
+
+ABMHUD* ABMCharacter::LocalHUD() const
+{
+	const APlayerController* PC = Cast<APlayerController>(GetController());
+	return PC ? Cast<ABMHUD>(PC->GetHUD()) : nullptr;
+}
+
+bool ABMCharacter::CanMoveLocally() const
+{
 	const ABMGameState* GS = GetWorld()->GetGameState<ABMGameState>();
-	if (!PC || !bAlive) return;
+	const bool bFrozen = !GS || GS->Phase == EBMPhase::Freeze || GS->Phase == EBMPhase::MatchOver || GS->Phase == EBMPhase::Warmup;
+	return bAlive && !bFrozen && ActionType == 0;
+}
 
-	float Dx = 0.f, Dy = 0.f; PC->GetInputMouseDelta(Dx, Dy);
+void ABMCharacter::OnMove(const FInputActionValue& V)
+{
+	if (!CanMoveLocally()) return;
+	const FVector2D In = V.Get<FVector2D>();
+	const FRotationMatrix Yaw(FRotator(0.f, GetControlRotation().Yaw, 0.f));
+	const float Scale = bWalkHeld ? 0.5f : 1.f;
+	AddMovementInput(Yaw.GetUnitAxis(EAxis::X), In.Y * Scale);
+	AddMovementInput(Yaw.GetUnitAxis(EAxis::Y), In.X * Scale);
+}
+
+void ABMCharacter::OnLookMouse(const FInputActionValue& V)
+{
+	if (!bAlive) return;
+	const FVector2D D = V.Get<FVector2D>() * CVarSens.GetValueOnGameThread(); // mouse counts -> degrees, frame-rate independent
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		FRotator R = PC->GetControlRotation();
+		R.Yaw += D.X; R.Pitch = FMath::Clamp(FRotator::NormalizeAxis(R.Pitch) + D.Y, -88.f, 88.f);
+		PC->SetControlRotation(R);
+	}
+}
+
+float ABMCharacter::AimFriction() const
+{
+	// Controller-only aim slowdown when the crosshair is over a visible enemy (standard console-shooter assist; no snapping).
+	const FVector Eye = EyeLocation(), Aim = GetControlRotation().Vector();
+	for (TActorIterator<ABMCharacter> It(GetWorld()); It; ++It)
+	{
+		if (!It->bAlive || It->Team == Team) continue;
+		const FVector To = It->GetActorLocation() + FVector(0, 0, 30) - Eye;
+		const float Dist = To.Size();
+		if (Dist > 6000.f || FVector::DotProduct(Aim, To / Dist) < FMath::Cos(FMath::DegreesToRadians(4.f))) continue;
+		FHitResult Hit; FCollisionQueryParams Q(SCENE_QUERY_STAT(BMFriction), false, this);
+		if (!GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + To, ECC_GameTraceChannel1, Q) || Hit.GetActor() == *It) return 0.45f;
+	}
+	return 1.f;
+}
+
+void ABMCharacter::OnLookStick(const FInputActionValue& V)
+{
+	if (!bAlive) return;
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC) return;
+	const float Rate = CVarStickRate.GetValueOnGameThread() * GetWorld()->GetDeltaSeconds() * AimFriction();
+	const FVector2D D = V.Get<FVector2D>() * Rate;
 	FRotator R = PC->GetControlRotation();
-	const float Sens = CVarSens.GetValueOnGameThread();
-	R.Yaw += Dx * Sens; R.Pitch = FMath::Clamp(FRotator::NormalizeAxis(R.Pitch) + Dy * Sens, -88.f, 88.f);
+	R.Yaw += D.X; R.Pitch = FMath::Clamp(FRotator::NormalizeAxis(R.Pitch) + D.Y, -88.f, 88.f);
 	PC->SetControlRotation(R);
+}
 
-	const bool bFrozen = GS && (GS->Phase == EBMPhase::Freeze || GS->Phase == EBMPhase::MatchOver || GS->Phase == EBMPhase::Warmup);
-	if (!bFrozen && ActionType == 0)
-	{
-		const FRotationMatrix Yaw(FRotator(0.f, R.Yaw, 0.f));
-		const float Walk = PC->IsInputKeyDown(EKeys::LeftShift) ? 0.5f : 1.f;
-		AddMovementInput(Yaw.GetUnitAxis(EAxis::X), ((PC->IsInputKeyDown(EKeys::W) ? 1.f : 0.f) - (PC->IsInputKeyDown(EKeys::S) ? 1.f : 0.f)) * Walk);
-		AddMovementInput(Yaw.GetUnitAxis(EAxis::Y), ((PC->IsInputKeyDown(EKeys::D) ? 1.f : 0.f) - (PC->IsInputKeyDown(EKeys::A) ? 1.f : 0.f)) * Walk);
-		if (PC->WasInputKeyJustPressed(EKeys::SpaceBar)) Jump();
-	}
+void ABMCharacter::OnFire(bool bDown)
+{
+	const ABMHUD* HUD = LocalHUD();
+	const bool bWant = bDown && bAlive && !(HUD && HUD->bBuyOpen);
+	if (bWant == bFireHeld) return; // only send changes
+	bFireHeld = bWant; ServerSetFiring(bWant);
+}
 
-	const bool bFire = PC->IsInputKeyDown(EKeys::LeftMouseButton) && !(HUD && HUD->bBuyOpen);
-	if (bFire != bSentFire) { bSentFire = bFire; ServerSetFiring(bFire); }
-	const bool bUse = PC->IsInputKeyDown(EKeys::E);
-	if (bUse != bSentUse) { bSentUse = bUse; ServerSetUse(bUse); }
-	if (PC->WasInputKeyJustPressed(EKeys::R)) ServerReload();
-	if (PC->WasInputKeyJustPressed(EKeys::F)) ServerAbility();
-	if (HUD)
+void ABMCharacter::OnJump()
+{
+	const ABMHUD* HUD = LocalHUD();
+	if (HUD && HUD->bBuyOpen) return; // A/Cross confirms the armory selection instead (OnConfirm)
+	if (CanMoveLocally()) Jump();
+}
+
+void ABMCharacter::OnConfirm()
+{
+	ABMHUD* HUD = LocalHUD();
+	if (HUD && HUD->bBuyOpen && bAlive) ServerBuy(static_cast<uint8>(HUD->BuyCursor));
+}
+
+void ABMCharacter::OnNextWeapon()
+{
+	if (!bAlive) return;
+	for (int32 Step = 1; Step <= 3; ++Step)
 	{
-		if (PC->WasInputKeyJustPressed(EKeys::B)) HUD->bBuyOpen = !HUD->bBuyOpen;
-		HUD->bBoard = PC->IsInputKeyDown(EKeys::Tab);
+		const uint8 S = static_cast<uint8>((Slot + Step) % 3);
+		if (Loadout[S] != NAME_None) { ServerSelectSlot(S); return; }
 	}
-	static const FKey Digits[9] = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine};
-	for (int32 I = 0; I < 9; ++I)
+}
+
+void ABMCharacter::OnArmory()
+{
+	if (ABMHUD* HUD = LocalHUD())
 	{
-		if (!PC->WasInputKeyJustPressed(Digits[I])) continue;
-		if (HUD && HUD->bBuyOpen) { if (I < BMWeapons::Shop(Team).Num()) ServerBuy(static_cast<uint8>(I)); }
-		else if (I < 3) ServerSelectSlot(I == 0 ? 0 : I == 1 ? 1 : 2);
+		HUD->bBuyOpen = !HUD->bBuyOpen && bAlive;
+		HUD->BuyCursor = 0;
+		if (HUD->bBuyOpen && bFireHeld) OnFire(false); // never keep shooting behind the menu
 	}
+}
+
+void ABMCharacter::OnBoardStart() { if (ABMHUD* HUD = LocalHUD()) HUD->bBoard = true; }
+void ABMCharacter::OnBoardStop() { if (ABMHUD* HUD = LocalHUD()) HUD->bBoard = false; }
+
+void ABMCharacter::OnMenuNav(const FInputActionValue& V)
+{
+	ABMHUD* HUD = LocalHUD();
+	if (!HUD || !HUD->bBuyOpen) return;
+	const int32 N = BMWeapons::Shop(Team).Num();
+	HUD->BuyCursor = (HUD->BuyCursor + (V.Get<float>() > 0.f ? 1 : -1) + N) % N;
+}
+
+void ABMCharacter::OnNumber(int32 Index)
+{
+	if (!bAlive) return;
+	if (ABMHUD* HUD = LocalHUD(); HUD && HUD->bBuyOpen)
+	{
+		if (Index < BMWeapons::Shop(Team).Num()) { HUD->BuyCursor = Index; ServerBuy(static_cast<uint8>(Index)); }
+	}
+	else if (Index < 3) ServerSelectSlot(static_cast<uint8>(Index));
 }
 
 void ABMCharacter::ServerTick(float Dt)
